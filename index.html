@@ -497,19 +497,17 @@ async function save(){
   if(!isEditor())return;
   try{
     setSyncStatus('saving','salvando...');
-    const fd=new FormData();
-    fd.append('data',JSON.stringify({DB,MES}));
-    const r=await fetch(SCRIPT_URL,{method:'POST',body:fd});
-    const txt=await r.text();
-    if(txt.trim()==='ok') setSyncStatus('ok','sincronizado ✓');
-    else setSyncStatus('err','erro ao salvar');
+    // usa no-cors com URL encoded para evitar CORS preflight
+    const body=new URLSearchParams({data:JSON.stringify({DB,MES})});
+    await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',body});
+    setSyncStatus('ok','sincronizado ✓');
   }catch(e){setSyncStatus('err','sem conexão');console.warn('Sheets save error',e);}
 }
 
 async function load(){
   setSyncStatus('saving','carregando...');
   try{
-    const r=await fetch(SCRIPT_URL+'?t='+Date.now());
+    const r=await fetch(SCRIPT_URL+'?t='+Date.now(),{mode:'cors'});
     if(r.ok){
       const txt=await r.text();
       const p=JSON.parse(txt);
