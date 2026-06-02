@@ -227,10 +227,14 @@ tr:hover td{background:#f9fafc;}
   <div class="toolbar">
     <button class="btn btn-p" onclick="abrirModalProd()">＋ Adicionar Produto</button>
     <button class="btn btn-o" onclick="abrirModalUpdate()">✏ Registrar Posição</button>
-    <button class="btn btn-o" onclick="exportCSV()">⬇ Exportar CSV</button>
     <button class="btn btn-o" onclick="abrirModalEditCat()">🏷 Editar Categoria</button>
     <button class="btn btn-p" onclick="document.getElementById('import-grade-file').click()">📥 Importar Grade</button>
     <input type="file" id="import-grade-file" accept=".json" style="display:none" onchange="importarGrade(event)"/>
+  </div>
+
+  <!-- EXPORTAR CSV - sempre visível -->
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <button class="btn btn-o" onclick="exportCSV()">⬇ Exportar CSV</button>
   </div>
 
   <!-- FILTROS -->
