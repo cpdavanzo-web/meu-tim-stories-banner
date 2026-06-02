@@ -487,12 +487,7 @@ function navMes(d){
 }
 
 // ── PERSIST ───────────────────────────────────────────────────────
-const SITE_ID='b664305c-d038-4253-8c0b-8be05a075147';
-const BLOB_KEY='meutim-data';
-
-
-
-async const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwNz6iGo6HSX7wA0MLAolBGLO274O1sD9xzJPAw-3qvAsMfMpMhZrDA5IRMwZ7MQWYn/exec';
+const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwNz6iGo6HSX7wA0MLAolBGLO274O1sD9xzJPAw-3qvAsMfMpMhZrDA5IRMwZ7MQWYn/exec';
 const EDITOR_PWD_KEY='tim_editor';
 
 function isEditor(){return localStorage.getItem(EDITOR_PWD_KEY)==='sim';}
@@ -981,6 +976,11 @@ function salvarEditCat(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
+window.onerror=function(msg,src,line,col,err){
+  document.body.insertAdjacentHTML('afterbegin',`<div style="background:red;color:white;padding:10px;font-size:12px;position:fixed;top:0;left:0;right:0;z-index:9999">ERRO JS: ${msg} (linha ${line})</div>`);
+  return false;
+};
+
 async function init(){
   await load();
   SEM=semAtual();
