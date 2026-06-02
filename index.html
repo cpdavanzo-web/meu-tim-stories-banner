@@ -985,10 +985,10 @@ async function init(){
   await load();
   SEM=semAtual();
 
-const J='2026-06';
-if(!DB[J]||!DB[J].produtos||!DB[J].produtos.length){
-  if(!DB[J])DB[J]={produtos:[],checks:{}};
-  DB[J].produtos=[
+  const J='2026-06';
+  if(!DB[J]||!DB[J].produtos||!DB[J].produtos.length){
+    if(!DB[J])DB[J]={produtos:[],checks:{}};
+    DB[J].produtos=[
     // ── NETFLIX ──────────────────────────────────────
     {id:uid(),nome:'Netflix',categoria:'Streaming',peca:'ambos',segs:['pos','ctrl'],pos:{
       pos_stories_q1:'6',pos_stories_q2:'6',ctrl_stories_q1:'8',ctrl_stories_q2:'8',
@@ -1066,7 +1066,6 @@ if(!DB[J]||!DB[J].produtos||!DB[J].produtos.length){
   ];
 }
 
-// Abre em junho 2026 se nao houver mes salvo
   if(!MES) MES=J;
   await save();render();
 }
@@ -1113,6 +1112,8 @@ function limparToken(){
 }
 function renderBloqueio(){
   const toolbar=document.querySelector('.toolbar');
+  // botão ⚙️ sempre visível
+  document.querySelectorAll('.config-btn').forEach(b=>b.style.display='');
   if(!isEditor()){
     if(toolbar)toolbar.style.display='none';
     document.querySelectorAll('.btn-backup').forEach(b=>{if(b.textContent.includes('Exportar'))b.style.display='';else b.style.display='none';});
