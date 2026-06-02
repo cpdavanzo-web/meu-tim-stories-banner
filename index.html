@@ -172,6 +172,12 @@ tr:hover td{background:#f9fafc;}
 .empty p{color:var(--text-light);}
 .sh{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
 .sh-title{font-size:15px;font-weight:700;}
+.import-prev-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px;}
+.import-prev-table th{background:#f7f9fc;padding:6px 10px;text-align:left;font-size:11px;color:var(--text-light);font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--border);}
+.import-prev-table td{padding:7px 10px;border-bottom:1px solid #f3f4f6;}
+.import-prev-table tr:last-child td{border:none;}
+.imp-new{color:var(--green);font-weight:700;}
+.imp-upd{color:var(--orange);font-weight:700;}
 .backup-bar{text-align:center;padding:28px 0 18px;border-top:1px solid var(--border);margin-top:30px;}
 .backup-bar span{font-size:11px;color:var(--text-light);margin-right:8px;}
 .btn-backup{background:none;border:1px solid var(--border);color:var(--text-light);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;}
@@ -223,6 +229,8 @@ tr:hover td{background:#f9fafc;}
     <button class="btn btn-o" onclick="abrirModalUpdate()">✏ Registrar Posição</button>
     <button class="btn btn-o" onclick="exportCSV()">⬇ Exportar CSV</button>
     <button class="btn btn-o" onclick="abrirModalEditCat()">🏷 Editar Categoria</button>
+    <button class="btn btn-p" onclick="document.getElementById('import-grade-file').click()">📥 Importar Grade</button>
+    <input type="file" id="import-grade-file" accept=".json" style="display:none" onchange="importarGrade(event)"/>
   </div>
 
   <!-- FILTROS -->
@@ -848,6 +856,7 @@ function abrirEditPos(pid,seg,pc,q){
   document.getElementById('modal-edit-pos').classList.add('open');
 }
 function salvarEditPos(){
+  if(!isEditor()){alert('Apenas o editor pode editar posições.');return;}
   const val=document.getElementById('ep-val').value;
   if(!val){alert('Informe a posição.');return;}
   const{pid,seg,pc,q}=editCtx;
@@ -883,6 +892,7 @@ function abrirModalProd(){
   document.getElementById('modal-prod').classList.add('open');
 }
 function salvarProd(){
+  if(!isEditor()){alert('Apenas o editor pode adicionar produtos.');return;}
   const nome=document.getElementById('m-nome').value.trim();
   if(!nome){alert('Informe o nome.');return;}if(!segsAtivos.size){alert('Selecione ao menos um segmento.');return;}
   const peca=document.getElementById('m-peca').value;const segs=[...segsAtivos];const pos={};
@@ -903,12 +913,14 @@ function onChgProd(){
   document.getElementById('u-peca').innerHTML=['stories','banner'].filter(pc=>temPeca(p,pc)).map(pc=>`<option value="${pc}">${pc==='stories'?'Stories':'Banner Novidades'}</option>`).join('');
 }
 function abrirRapido(pid,seg,peca,sem){
+  if(!isEditor()){alert('Apenas o editor pode registrar posições.');return;}
   const prods=D().produtos;
   document.getElementById('u-prod').innerHTML=prods.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${p.nome}</option>`).join('');
   onChgProd();document.getElementById('u-seg').value=seg;document.getElementById('u-peca').value=peca;document.getElementById('u-sem').value=sem;
   document.getElementById('modal-upd').classList.add('open');
 }
 function salvarCheck(){
+  if(!isEditor()){alert('Apenas o editor pode registrar posições.');return;}
   const pos=document.getElementById('u-pos').value;if(!pos){alert('Informe a posição.');return;}
   const pid=document.getElementById('u-prod').value;const seg=document.getElementById('u-seg').value;
   const peca=document.getElementById('u-peca').value;const sem=document.getElementById('u-sem').value;
@@ -918,6 +930,7 @@ function salvarCheck(){
 }
 
 function remover(id){
+  if(!isEditor()){alert('Apenas o editor pode remover produtos.');return;}
   if(!confirm('Remover este produto?'))return;
   const d=D();d.produtos=d.produtos.filter(p=>p.id!==id);
   Object.keys(d.checks).filter(k=>k.startsWith(id+'|')).forEach(k=>delete d.checks[k]);
@@ -965,6 +978,7 @@ function abrirModalEditCat(){
   document.getElementById('modal-edit-cat').classList.add('open');
 }
 function salvarEditCat(){
+  if(!isEditor()){alert('Apenas o editor pode editar categorias.');return;}
   const pid=document.getElementById('ec-prod').value;
   const cat=document.getElementById('ec-cat').value;
   const p=D().produtos.find(x=>x.id===pid);
@@ -974,6 +988,70 @@ function salvarEditCat(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
+// ── IMPORTAR GRADE ───────────────────────────────────────────────
+let pendingImport = null;
+
+function importarGrade(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const parsed=JSON.parse(ev.target.result);
+      if(!parsed.produtos||!Array.isArray(parsed.produtos))throw new Error('Formato inválido');
+      pendingImport=parsed;
+      mostrarPreviewImport(parsed);
+      document.getElementById('modal-import-grade').classList.add('open');
+    }catch(err){
+      alert('Arquivo inválido. Certifique-se de usar o JSON gerado pelo Claude.');
+    }
+    document.getElementById('import-grade-file').value='';
+  };
+  reader.readAsText(file);
+}
+
+function mostrarPreviewImport(parsed){
+  const prods=D().produtos;
+  const rows=parsed.produtos.map(p=>{
+    const existe=prods.find(x=>x.nome.toLowerCase()===p.nome.toLowerCase());
+    const status=existe?'<span class="imp-upd">↺ Atualizar</span>':'<span class="imp-new">+ Novo</span>';
+    const segs=p.segs?p.segs.map(s=>`<span class="seg seg-${s}" style="font-size:10px">${SEGS[s]}</span>`).join(''):'—';
+    const peca={ambos:'ST + BN',stories:'Stories',banner:'Banner'}[p.peca]||p.peca;
+    return `<tr><td>${status}</td><td><strong>${p.nome}</strong></td><td><span class="badge bg">${p.categoria}</span></td><td>${segs}</td><td style="font-size:11px">${peca}</td></tr>`;
+  }).join('');
+  document.getElementById('import-preview').innerHTML=`
+    <table class="import-prev-table">
+      <thead><tr><th>Ação</th><th>Produto</th><th>Categoria</th><th>Segmentos</th><th>Peça</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  const novos=parsed.produtos.filter(p=>!prods.find(x=>x.nome.toLowerCase()===p.nome.toLowerCase())).length;
+  const atualizados=parsed.produtos.length-novos;
+  document.getElementById('import-summary').textContent=`${parsed.produtos.length} produto(s): ${novos} novo(s), ${atualizados} a atualizar. Mês: ${parsed.mes||MES}`;
+}
+
+function confirmarImport(){
+  if(!pendingImport)return;
+  const d=D();
+  // Se o JSON tiver um mês específico, mudar para ele
+  if(pendingImport.mes) MES=pendingImport.mes;
+  if(!DB[MES]) DB[MES]={produtos:[],checks:{}};
+
+  pendingImport.produtos.forEach(np=>{
+    const idx=d.produtos.findIndex(x=>x.nome.toLowerCase()===np.nome.toLowerCase());
+    const prod={
+      id: idx>=0 ? d.produtos[idx].id : uid(),
+      nome:np.nome, categoria:np.categoria,
+      peca:np.peca, segs:np.segs, pos:np.pos||{}
+    };
+    if(idx>=0) d.produtos[idx]=prod;
+    else d.produtos.push(prod);
+  });
+
+  pendingImport=null;
+  save();render();
+  closeModal('modal-import-grade');
+  alert('Grade importada com sucesso!');
+}
+
 window.onerror=function(msg,src,line,col,err){
   document.body.insertAdjacentHTML('afterbegin',`<div style="background:red;color:white;padding:10px;font-size:12px;position:fixed;top:0;left:0;right:0;z-index:9999">ERRO JS: ${msg} (linha ${line})</div>`);
   return false;
@@ -1151,6 +1229,20 @@ function importBackup(e){
   reader.readAsText(file);
 }
 </script>
+<!-- MODAL IMPORTAR GRADE -->
+<div class="overlay" id="modal-import-grade">
+  <div class="modal" style="width:600px">
+    <div class="modal-title">📥 Importar Grade</div>
+    <p style="font-size:13px;color:var(--text-mid);margin-bottom:14px">Revise os produtos antes de importar. Produtos com mesmo nome serão <strong>atualizados</strong>, novos serão <strong>adicionados</strong>.</p>
+    <div id="import-preview" style="max-height:350px;overflow-y:auto;margin-bottom:14px"></div>
+    <div style="font-size:12px;color:var(--text-light);margin-bottom:14px" id="import-summary"></div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="closeModal('modal-import-grade')">Cancelar</button>
+      <button class="btn btn-p" onclick="confirmarImport()">✓ Confirmar Importação</button>
+    </div>
+  </div>
+</div>
+
 <div class="backup-bar">
   <span>💾 Backup dos dados</span>
   <button class="btn-backup" onclick="exportBackup()">⬇ Exportar backup</button>
