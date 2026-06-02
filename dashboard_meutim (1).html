@@ -172,6 +172,18 @@ tr:hover td{background:#f9fafc;}
 .empty p{color:var(--text-light);}
 .sh{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
 .sh-title{font-size:15px;font-weight:700;}
+.backup-bar{text-align:center;padding:28px 0 18px;border-top:1px solid var(--border);margin-top:30px;}
+.backup-bar span{font-size:11px;color:var(--text-light);margin-right:8px;}
+.btn-backup{background:none;border:1px solid var(--border);color:var(--text-light);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.btn-backup:hover{border-color:var(--blue);color:var(--blue);}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#ccc;display:inline-block;margin-right:5px;transition:background .3s;}
+.sync-dot.ok{background:var(--green);}
+.sync-dot.err{background:var(--red);}
+.sync-dot.saving{background:var(--orange);animation:pulse .8s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-label{font-size:11px;color:rgba(255,255,255,.7);}
+.config-btn{background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:16px;padding:4px;transition:color .15s;}
+.config-btn:hover{color:#fff;}
 </style>
 </head>
 <body>
@@ -185,6 +197,7 @@ tr:hover td{background:#f9fafc;}
       <button onclick="navMes(-1)">‹</button>
       <span class="mes-lbl" id="mes-lbl">—</span>
       <button onclick="navMes(1)">›</button>
+      <button class="config-btn" onclick="abrirConfig()" title="Configurações de acesso">⚙️</button>
     </div>
   </div>
 </div>
@@ -331,6 +344,24 @@ tr:hover td{background:#f9fafc;}
 </div>
 </div>
 
+<!-- MODAL CONFIG SENHA -->
+<div class="overlay" id="modal-config">
+  <div class="modal" style="width:380px">
+    <div class="modal-title">🔐 Acesso de Editor</div>
+    <p style="font-size:13px;color:var(--text-mid);margin-bottom:16px">Digite a senha para habilitar o modo de edição. Visitantes sem senha podem ver tudo mas não editar.</p>
+    <div class="fg">
+      <label>Senha</label>
+      <input id="cfg-token" type="password" placeholder="Digite a senha..."/>
+    </div>
+    <div id="cfg-status" style="font-size:12px;margin-bottom:8px;min-height:18px;"></div>
+    <div class="mfoot">
+      <button class="btn btn-d btn-sm" onclick="limparToken()">Sair do modo editor</button>
+      <button class="btn btn-o" onclick="closeModal('modal-config')">Cancelar</button>
+      <button class="btn btn-p" onclick="salvarToken()">Entrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL EDITAR CATEGORIA -->
 <div class="overlay" id="modal-edit-cat">
   <div class="modal" style="width:400px">
@@ -456,15 +487,52 @@ function navMes(d){
 }
 
 // ── PERSIST ───────────────────────────────────────────────────────
-function save(){try{localStorage.setItem('tim_v5',JSON.stringify({DB,MES}));}catch(e){}}
-function load(){
+const SITE_ID='b664305c-d038-4253-8c0b-8be05a075147';
+const BLOB_KEY='meutim-data';
+
+
+
+async const SCRIPT_URL='https://script.google.com/macros/s/AKfycbwNz6iGo6HSX7wA0MLAolBGLO274O1sD9xzJPAw-3qvAsMfMpMhZrDA5IRMwZ7MQWYn/exec';
+const EDITOR_PWD_KEY='tim_editor';
+
+function isEditor(){return localStorage.getItem(EDITOR_PWD_KEY)==='sim';}
+
+async function save(){
+  try{localStorage.setItem('tim_v5',JSON.stringify({DB,MES}));}catch(e){}
+  if(!isEditor())return;
+  try{
+    setSyncStatus('saving','salvando...');
+    const fd=new FormData();
+    fd.append('data',JSON.stringify({DB,MES}));
+    const r=await fetch(SCRIPT_URL,{method:'POST',body:fd});
+    const txt=await r.text();
+    if(txt.trim()==='ok') setSyncStatus('ok','sincronizado ✓');
+    else setSyncStatus('err','erro ao salvar');
+  }catch(e){setSyncStatus('err','sem conexão');console.warn('Sheets save error',e);}
+}
+
+async function load(){
+  setSyncStatus('saving','carregando...');
+  try{
+    const r=await fetch(SCRIPT_URL+'?t='+Date.now());
+    if(r.ok){
+      const txt=await r.text();
+      const p=JSON.parse(txt);
+      if(p&&p.DB){
+        DB=p.DB;MES=p.MES||mesAtual();
+        try{localStorage.setItem('tim_v5',JSON.stringify({DB,MES}));}catch(e){}
+        setSyncStatus('ok','sincronizado ✓');
+        return;
+      }
+    }
+  }catch(e){console.warn('Sheets load error',e);}
   try{
     const d=localStorage.getItem('tim_v5');
     if(d){const p=JSON.parse(d);DB=p.DB||{};MES=p.MES||mesAtual();}
     else MES=mesAtual();
   }catch(e){MES=mesAtual();}
+  setSyncStatus('err','usando cache local');
 }
-
 // ── FILTROS ───────────────────────────────────────────────────────
 function getFiltros(){return{prod:document.getElementById('f-prod').value,cat:document.getElementById('f-cat').value,seg:document.getElementById('f-seg').value,peca:document.getElementById('f-peca').value};}
 function limparFiltros(){['f-prod','f-cat','f-seg','f-peca'].forEach(id=>{document.getElementById(id).value='';});render();}
@@ -483,7 +551,7 @@ function atualizarFiltroProds(){
 }
 
 // ── RENDER PRINCIPAL ──────────────────────────────────────────────
-function render(){
+function render(){renderBloqueio();
   document.getElementById('mes-lbl').textContent=mesStr(MES);
   const sa=semAtual();
   document.getElementById('sem-pill').textContent=`S${sa} · ${Q(sa)===1?'1ª':'2ª'} quinzena`;
@@ -913,8 +981,9 @@ function salvarEditCat(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
-load();   // carrega localStorage preservando tudo que o usuario ja salvou
-SEM=semAtual();
+async function init(){
+  await load();
+  SEM=semAtual();
 
 const J='2026-06';
 if(!DB[J]||!DB[J].produtos||!DB[J].produtos.length){
@@ -998,8 +1067,96 @@ if(!DB[J]||!DB[J].produtos||!DB[J].produtos.length){
 }
 
 // Abre em junho 2026 se nao houver mes salvo
-if(!MES) MES=J;
-save();render();
+  if(!MES) MES=J;
+  await save();render();
+}
+init();
+
+// ── CONFIG / SENHA / SYNC ────────────────────────────────────────
+const SENHA_EDITOR='MeuTIM@2026';
+
+function setSyncStatus(status,txt){
+  const dot=document.getElementById('sync-dot');
+  const lbl=document.getElementById('sync-txt');
+  if(!dot||!lbl)return;
+  dot.className='sync-dot '+(status==='ok'?'ok':status==='err'?'err':status==='saving'?'saving':'');
+  lbl.textContent=txt;
+}
+function abrirConfig(){
+  document.getElementById('cfg-token').value='';
+  document.getElementById('cfg-status').textContent='';
+  document.getElementById('cfg-status').style.color='';
+  document.getElementById('modal-config').classList.add('open');
+}
+async function salvarToken(){
+  const t=document.getElementById('cfg-token').value.trim();
+  if(!t){alert('Digite a senha.');return;}
+  if(t!==SENHA_EDITOR){
+    document.getElementById('cfg-status').style.color='var(--red)';
+    document.getElementById('cfg-status').textContent='✗ Senha incorreta.';
+    return;
+  }
+  localStorage.setItem(EDITOR_PWD_KEY,'sim');
+  document.getElementById('cfg-status').style.color='var(--green)';
+  document.getElementById('cfg-status').textContent='✓ Acesso liberado! Sincronizando...';
+  renderBloqueio();
+  setSyncStatus('saving','sincronizando...');
+  await save();
+  setTimeout(()=>closeModal('modal-config'),1000);
+}
+function limparToken(){
+  if(!confirm('Sair do modo editor?'))return;
+  localStorage.removeItem(EDITOR_PWD_KEY);
+  closeModal('modal-config');
+  setSyncStatus('','somente leitura');
+  renderBloqueio();
+}
+function renderBloqueio(){
+  const toolbar=document.querySelector('.toolbar');
+  if(!isEditor()){
+    if(toolbar)toolbar.style.display='none';
+    document.querySelectorAll('.btn-backup').forEach(b=>{if(b.textContent.includes('Exportar'))b.style.display='';else b.style.display='none';});
+    document.querySelectorAll('.btn-icon').forEach(b=>b.style.display='none');
+  }else{
+    if(toolbar)toolbar.style.display='';
+    document.querySelectorAll('.btn-backup').forEach(b=>b.style.display='');
+    document.querySelectorAll('.btn-icon').forEach(b=>b.style.display='');
+  }
+}
+
+// ── BACKUP / RESTORE ─────────────────────────────────────────────
+function exportBackup(){
+  const payload=JSON.stringify({DB,MES},null,2);
+  const a=document.createElement('a');
+  const date=new Date().toISOString().slice(0,10);
+  a.href=URL.createObjectURL(new Blob([payload],{type:'application/json'}));
+  a.download=`MeuTIM_backup_${date}.json`;
+  a.click();
+}
+function importBackup(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      const parsed=JSON.parse(ev.target.result);
+      if(!parsed.DB)throw new Error('Formato inválido');
+      DB=parsed.DB;
+      MES=parsed.MES||mesAtual();
+      save();render();
+      alert('Backup restaurado com sucesso!');
+    }catch(err){
+      alert('Erro ao restaurar: arquivo inválido.');
+    }
+    document.getElementById('import-file').value='';
+  };
+  reader.readAsText(file);
+}
 </script>
+<div class="backup-bar">
+  <span>💾 Backup dos dados</span>
+  <button class="btn-backup" onclick="exportBackup()">⬇ Exportar backup</button>
+  <button class="btn-backup" onclick="document.getElementById('import-file').click()">⬆ Restaurar backup</button>
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(event)"/>
+</div>
 </body>
 </html>
